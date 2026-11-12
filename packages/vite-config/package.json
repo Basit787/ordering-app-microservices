@@ -1,0 +1,44 @@
+{
+  "name": "vite-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check"
+  },
+  "dependencies": {
+    "ports": "workspace:*",
+    "@tailwindcss/vite": "*",
+    "@tanstack/devtools-vite": "*",
+    "@tanstack/router-plugin": "*",
+    "@vitejs/plugin-react": "*"
+  },
+  "peerDependencies": {
+    "vite": "*"
+  },
+  "devDependencies": {
+    "biome-config": "workspace:*",
+    "tsconfig": "workspace:*",
+    "@biomejs/biome": "*",
+    "@types/node": "*",
+    "tsup": "*",
+    "typescript": "*",
+    "vite": "*"
+  }
+}

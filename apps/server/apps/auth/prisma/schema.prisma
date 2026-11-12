@@ -1,0 +1,30 @@
+// prisma-client-js writes the client into node_modules/@prisma-db/auth (no generated folder in the source tree)
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma-db/auth"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+}
+
+// An account; every service trusts the role inside its JWT
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  // Stored lowercased
+  email        String   @unique
+  // scrypt hash (src/auth/utils/hash-password.ts); never the password itself
+  passwordHash String
+  role         Role     @default(user)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}

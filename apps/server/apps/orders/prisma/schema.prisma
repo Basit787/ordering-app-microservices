@@ -1,0 +1,75 @@
+// prisma-client-js writes the client into node_modules/@prisma-db/orders (no generated folder in the source tree)
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma-db/orders"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// processing (queued for placement) → pending_payment | rejected; pending_payment → paid | payment_failed;
+// paid → shipped → delivered; pending_payment | paid → cancelled
+enum OrderStatus {
+  processing
+  rejected
+  pending_payment
+  paid
+  payment_failed
+  shipped
+  delivered
+  cancelled
+}
+
+type CartItem {
+  productId String @db.ObjectId
+  quantity  Int
+}
+
+// One cart per user; prices are read from products when the cart is shown
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique @db.ObjectId
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+
+  @@map("carts")
+}
+
+// A product line as it was bought: name and price are copied at checkout
+type OrderItem {
+  productId  String @db.ObjectId
+  name       String
+  priceCents Int
+  quantity   Int
+}
+
+type Address {
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String
+  country    String
+}
+
+model Order {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String      @db.ObjectId
+  userName        String
+  items           OrderItem[]
+  totalCents      Int
+  status          OrderStatus @default(processing)
+  shippingAddress Address
+  paymentId       String?     @db.ObjectId
+  failureReason   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("orders")
+}

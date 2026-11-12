@@ -1,0 +1,208 @@
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type PaginationState,
+  type RowSelectionState,
+  type SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+import { cn } from "oamui/lib/utils";
+import { Skeleton } from "oamui/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "oamui/ui/table";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { OamUiAlertDialog } from "../surface/oamui-alert-dialog";
+import type { OamUiDataTableProps, RunTableAction } from "./oamui-data-table.types";
+import { ACTIONS_COLUMN_ID, buildColumns, SELECT_COLUMN_ID } from "./oamui-data-table-columns";
+import { OamUiDataTablePagination } from "./oamui-data-table-pagination";
+import { OamUiDataTableToolbar } from "./oamui-data-table-toolbar";
+
+type PendingConfirm = {
+  title: ReactNode;
+  description?: ReactNode;
+  confirmText?: ReactNode;
+  destructive?: boolean;
+  run: () => void;
+};
+
+const SKELETON_ROWS = 5;
+
+// Sortable, searchable, paginated table from plain column and action configs; spread one config object into it
+export function OamUiDataTable<T>({
+  data,
+  columns,
+  getRowId,
+  singleRowActions,
+  multiRowActions,
+  tableActions,
+  filters,
+  searchable = true,
+  searchPlaceholder = "Search…",
+  pageSize = 10,
+  pageSizeOptions = [10, 20, 50],
+  loading,
+  emptyText = "No data",
+  className,
+}: OamUiDataTableProps<T>) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
+  const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries((filters ?? []).map((filter) => [filter.id, filter.defaultValue ?? filter.options[0]?.value])),
+  );
+
+  // Rows that pass every filter's chosen option
+  const filteredData = useMemo(() => {
+    if (!filters?.length) return data;
+    const matchers = filters.map(
+      (filter) => filter.options.find((option) => option.value === filterValues[filter.id])?.match,
+    );
+    return data.filter((row) => matchers.every((match) => !match || match(row)));
+  }, [data, filters, filterValues]);
+
+  const selectable = !!multiRowActions?.length;
+  const classNames = useMemo(() => new Map(columns.map((column) => [column.id, column.className])), [columns]);
+
+  const tableColumns = useMemo(() => {
+    const runAction: RunTableAction<T> = (confirm, rows, destructive, run) => {
+      if (!confirm) return run();
+      const description = typeof confirm.description === "function" ? confirm.description(rows) : confirm.description;
+      setPending({ title: confirm.title, description, confirmText: confirm.confirmText, destructive, run });
+    };
+    return { runAction, defs: buildColumns({ columns, selectable, singleRowActions, runAction }) };
+  }, [columns, selectable, singleRowActions]);
+
+  const table = useReactTable({
+    data: filteredData,
+    columns: tableColumns.defs,
+    getRowId: (row) => getRowId(row),
+    state: { sorting, rowSelection, globalFilter, pagination },
+    onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
+    onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
+    enableRowSelection: selectable,
+    globalFilterFn: "includesString",
+    // Keep the page when data refreshes; the effect below pulls it back if it no longer exists
+    autoResetPageIndex: false,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const pageCount = table.getPageCount();
+  useEffect(() => {
+    if (pagination.pageIndex > 0 && pagination.pageIndex >= pageCount) {
+      setPagination((current) => ({ ...current, pageIndex: Math.max(0, pageCount - 1) }));
+    }
+  }, [pageCount, pagination.pageIndex]);
+
+  const columnCount = table.getVisibleLeafColumns().length;
+  const rows = table.getRowModel().rows;
+
+  return (
+    <div className={cn("flex flex-col gap-3", className)}>
+      <OamUiDataTableToolbar
+        search={
+          searchable
+            ? {
+                value: globalFilter,
+                placeholder: searchPlaceholder,
+                onChange: (value) => {
+                  setGlobalFilter(value);
+                  setPagination((current) => ({ ...current, pageIndex: 0 }));
+                },
+              }
+            : undefined
+        }
+        selectedRows={table.getSelectedRowModel().rows.map((row) => row.original)}
+        multiRowActions={multiRowActions}
+        tableActions={tableActions}
+        filters={filters?.map((filter) => ({
+          ...filter,
+          value: filterValues[filter.id],
+          onChange: (value: string) => {
+            setFilterValues((current) => ({ ...current, [filter.id]: value }));
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+            // Hidden rows must not stay selected
+            table.resetRowSelection();
+          },
+        }))}
+        runAction={tableColumns.runAction}
+        onClearSelection={() => table.resetRowSelection()}
+      />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className={cn(
+                      header.column.id === SELECT_COLUMN_ID && "w-10",
+                      header.column.id === ACTIONS_COLUMN_ID && "w-12",
+                      classNames.get(header.column.id),
+                    )}
+                  >
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              Array.from({ length: SKELETON_ROWS }, (_, index) => (
+                <TableRow key={index}>
+                  {Array.from({ length: columnCount }, (_, cell) => (
+                    <TableCell key={cell}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : rows.length ? (
+              rows.map((row) => (
+                <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className={classNames.get(cell.column.id)}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
+                  {globalFilter ? "No matching rows" : emptyText}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <OamUiDataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
+
+      <OamUiAlertDialog
+        open={!!pending}
+        onOpenChange={(open) => !open && setPending(null)}
+        title={pending?.title}
+        description={pending?.description}
+        confirmText={pending?.confirmText ?? "Confirm"}
+        destructive={pending?.destructive}
+        onConfirm={() => {
+          pending?.run();
+          setPending(null);
+        }}
+      />
+    </div>
+  );
+}

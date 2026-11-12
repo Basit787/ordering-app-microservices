@@ -1,0 +1,18 @@
+{
+  "extends": "tsconfig/react-app.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "oamui": ["./src/index.ts"],
+      "oamui/ui": ["./src/ui"],
+      "oamui/ui/*": ["./src/ui/*"],
+      "oamui/lib": ["./src/lib"],
+      "oamui/lib/*": ["./src/lib/*"],
+      "oamui/hooks": ["./src/hooks"],
+      "oamui/hooks/*": ["./src/hooks/*"],
+      "oamui/components": ["./src/components"],
+      "oamui/components/*": ["./src/components/*"]
+    }
+  },
+  "include": ["src", "tsup.config.ts"]
+}

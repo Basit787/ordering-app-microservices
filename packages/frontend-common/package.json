@@ -1,0 +1,54 @@
+{
+  "name": "frontend-common",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check"
+  },
+  "dependencies": {
+    "axios": "*",
+    "oamui": "workspace:*",
+    "ports": "workspace:*",
+    "zustand": "*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-form": "*",
+    "@tanstack/react-query": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "*",
+    "@tanstack/react-form": "*",
+    "@tanstack/react-query": "*",
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "biome-config": "workspace:*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "tsconfig": "workspace:*",
+    "tsup": "*",
+    "typescript": "*"
+  }
+}

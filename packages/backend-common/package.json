@@ -1,0 +1,64 @@
+{
+  "name": "backend-common",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "*",
+    "bullmq": "*",
+    "helmet": "*",
+    "joi": "*",
+    "jose": "*",
+    "multer": "*",
+    "ports": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "*",
+    "@nestjs/config": "*",
+    "@nestjs/core": "*",
+    "@nestjs/microservices": "*",
+    "@nestjs/swagger": "*",
+    "class-transformer": "*",
+    "class-validator": "*",
+    "rxjs": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "*",
+    "@nestjs/common": "*",
+    "@nestjs/config": "*",
+    "@nestjs/core": "*",
+    "@nestjs/microservices": "*",
+    "@nestjs/swagger": "*",
+    "@types/amqplib": "*",
+    "@types/multer": "*",
+    "@types/node": "*",
+    "amqplib": "*",
+    "biome-config": "workspace:*",
+    "class-transformer": "*",
+    "class-validator": "*",
+    "reflect-metadata": "*",
+    "rxjs": "*",
+    "tsconfig": "workspace:*",
+    "tsup": "*",
+    "typescript": "*"
+  }
+}

@@ -1,0 +1,44 @@
+// prisma-client-js writes the client into node_modules/@prisma-db/products (no generated folder in the source tree)
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma-db/products"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+model Product {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String    @unique
+  description String    @default("")
+  // Smallest currency unit (paise); orders copy it at checkout
+  priceCents  Int
+  stock       Int       @default(0)
+  // External picture; an uploaded one (imageKey) takes its place
+  imageUrl    String?
+  // S3 key of the uploaded picture (bucket S3_BUCKET), served at GET /products/:id/image
+  imageKey    String?
+  // false hides it from the store; existing orders keep their copy
+  active      Boolean   @default(true)
+  categoryId  String?   @db.ObjectId
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([categoryId])
+  @@map("products")
+}

@@ -1,0 +1,72 @@
+{
+  "name": "oamui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./globals.css": "./dist/globals.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check"
+  },
+  "dependencies": {
+    "@base-ui/react": "*",
+    "@shadcn/react": "*",
+    "@tanstack/react-table": "*",
+    "class-variance-authority": "*",
+    "clsx": "*",
+    "cmdk": "*",
+    "date-fns": "*",
+    "embla-carousel-react": "*",
+    "input-otp": "*",
+    "radix-ui": "*",
+    "react-day-picker": "*",
+    "react-resizable-panels": "*",
+    "recharts": "*",
+    "shadcn": "*",
+    "tailwind-merge": "*",
+    "tw-animate-css": "*",
+    "vaul": "*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-form": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "sonner": "*",
+    "zod": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "*",
+    "@tanstack/react-form": "*",
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "biome-config": "workspace:*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "sonner": "*",
+    "tailwindcss": "*",
+    "tsconfig": "workspace:*",
+    "tsup": "*",
+    "typescript": "*",
+    "zod": "*"
+  }
+}

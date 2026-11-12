@@ -1,0 +1,34 @@
+{
+  "name": "ports",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check"
+  },
+  "devDependencies": {
+    "biome-config": "workspace:*",
+    "tsconfig": "workspace:*",
+    "@biomejs/biome": "*",
+    "tsup": "*",
+    "typescript": "*",
+    "@types/node": "*"
+  }
+}

@@ -1,79 +1,183 @@
-version: "3.8"
+name: oam
+
+# Every Nest service: one dev image, the server source bind-mounted, infrastructure healthy first
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: docker/server/Dockerfile
+    target: dev
+  image: oam-server:dev
+  restart: unless-stopped
+  volumes:
+    - ./apps/server/apps:/repo/apps/server/apps
+  depends_on:
+    mongodb: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+# Every web app: one dev image, the app folder bind-mounted, Vite proxying /<service>-api to the containers
+x-client: &client
+  build:
+    context: .
+    dockerfile: docker/client/Dockerfile
+    target: dev
+    args: { APP: "@oam/auth" }
+  image: oam-client:dev
+  restart: unless-stopped
+  environment:
+    CHOKIDAR_USEPOLLING: "true"
+    AUTH_PROXY_TARGET: http://auth:3001
+    PRODUCTS_PROXY_TARGET: http://products:3021
+    ORDERS_PROXY_TARGET: http://orders:3022
+    PAYMENTS_PROXY_TARGET: http://payments:3023
+
+# Shared backend environment: reused below with `<<: *backend-env`
+x-backend-env: &backend-env
+  NODE_ENV: development
+  # File events don't reach Docker containers reliably on macOS
+  WATCHPACK_POLLING: "true"
+  JWT_SECRET: ${JWT_SECRET}
+  RABBIT_MQ_URI: amqp://rabbitmq:5672
+  REDIS_URL: redis://redis:6379
+  RABBIT_MQ_PRODUCTS_QUEUE: products
+  RABBIT_MQ_ORDERS_QUEUE: orders
+  RABBIT_MQ_PAYMENTS_QUEUE: payments
 
 services:
-  orders:
-    build:
-      context: .
-      dockerfile: apps/orders/Dockerfile
-      target: development
-    command: pnpm run start:dev orders
-    env_file:
-      - ./apps/orders/.env
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    ports:
-      - "3000:3000"
-    depends_on:
-      - mongodb-primary
-      - mongodb-secondary
-      - mongodb-arbiter
+  # Single-node replica set: Prisma needs one for MongoDB writes
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports: ["27017:27017"]
+    volumes: [mongodb_data:/data/db]
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }) }; quit(db.hello().isWritablePrimary ? 0 : 1)"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
 
-  billing:
-    build:
-      context: .
-      dockerfile: apps/billing/Dockerfile
-      target: development
-    command: pnpm run start:dev billing
-    env_file:
-      - ./apps/billing/.env
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    depends_on:
-      - mongodb-primary
-      - mongodb-secondary
-      - mongodb-arbiter
-      - rabbitmq
+  # Local S3 (same emulator as my-app); every service that stores files creates its bucket on start
+  floci:
+    image: floci/floci:2.3.0
+    restart: unless-stopped
+    ports: ["4566:4566"]
+
+  # BullMQ job queues (order placement, unpaid-order expiry, payment charges)
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
 
   rabbitmq:
-    image: rabbitmq
-    ports:
-      - "5672:5672"
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    ports: ["5672:5672", "15672:15672"]
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
 
-  mongodb-primary:
-    image: docker.io/bitnami/mongodb:latest
+  auth:
+    <<: *backend
+    command: sh -c "pnpm exec prisma generate --config apps/auth/prisma.config.ts && pnpm exec prisma db push --skip-generate --config apps/auth/prisma.config.ts && pnpm exec prisma db seed --config apps/auth/prisma.config.ts && pnpm exec nest start --watch auth"
+    ports: ["3001:3001"]
     environment:
-      - MONGODB_ADVERTISED_HOSTNAME=mongodb-primary
-      - MONGODB_REPLICA_SET_MODE=primary
-      - MONGODB_ROOT_PASSWORD=password123
-      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+      <<: *backend-env
+      PORT: "3001"
+      DATABASE_URL: mongodb://mongodb:27017/auth?replicaSet=rs0&directConnection=true
+      ADMIN_NAME: ${ADMIN_NAME}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+  products:
+    <<: *backend
+    command: sh -c "pnpm exec prisma generate --config apps/products/prisma.config.ts && pnpm exec prisma db push --skip-generate --config apps/products/prisma.config.ts && pnpm exec prisma db seed --config apps/products/prisma.config.ts && pnpm exec nest start --watch products"
+    ports: ["3021:3021"]
+    environment:
+      <<: *backend-env
+      PORT: "3021"
+      DATABASE_URL: mongodb://mongodb:27017/products?replicaSet=rs0&directConnection=true
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://floci:4566}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-test}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-test}
+      S3_BUCKET: products
+
+  orders:
+    <<: *backend
+    command: sh -c "pnpm exec prisma generate --config apps/orders/prisma.config.ts && pnpm exec prisma db push --skip-generate --config apps/orders/prisma.config.ts && pnpm exec nest start --watch orders"
+    ports: ["3022:3022"]
+    environment:
+      <<: *backend-env
+      PORT: "3022"
+      DATABASE_URL: mongodb://mongodb:27017/orders?replicaSet=rs0&directConnection=true
+      PAYMENT_TIMEOUT_MINUTES: ${PAYMENT_TIMEOUT_MINUTES:-30}
+
+  payments:
+    <<: *backend
+    command: sh -c "pnpm exec prisma generate --config apps/payments/prisma.config.ts && pnpm exec prisma db push --skip-generate --config apps/payments/prisma.config.ts && pnpm exec nest start --watch payments"
+    ports: ["3023:3023"]
+    environment:
+      <<: *backend-env
+      PORT: "3023"
+      DATABASE_URL: mongodb://mongodb:27017/payments?replicaSet=rs0&directConnection=true
+      PAYMENT_LIMIT_CENTS: ${PAYMENT_LIMIT_CENTS:-10000000}
+      PAYMENT_CURRENCY: ${PAYMENT_CURRENCY:-INR}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+
+  auth-web:
+    <<: *client
+    command: pnpm --filter @oam/auth dev --host 0.0.0.0
+    ports: ["3000:3000"]
     volumes:
-      - mongodb_master_data:/bitnami/mongodb
-    ports:
-      - "27017:27017"
+      - ./apps/client/auth:/repo/apps/client/auth
+      - /repo/apps/client/auth/node_modules
+    depends_on: [auth, products]
 
-  mongodb-secondary:
-    image: docker.io/bitnami/mongodb:latest
-    depends_on:
-      - mongodb-primary
-    environment:
-      - MONGODB_ADVERTISED_HOSTNAME=mongodb-secondary
-      - MONGODB_REPLICA_SET_MODE=secondary
-      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
-      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=password123
-      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+  products-web:
+    <<: *client
+    command: pnpm --filter @oam/products dev --host 0.0.0.0
+    ports: ["3002:3002"]
+    volumes:
+      - ./apps/client/products:/repo/apps/client/products
+      - /repo/apps/client/products/node_modules
+    depends_on: [products, orders]
 
-  mongodb-arbiter:
-    image: docker.io/bitnami/mongodb:latest
-    depends_on:
-      - mongodb-primary
-    environment:
-      - MONGODB_ADVERTISED_HOSTNAME=mongodb-arbiter
-      - MONGODB_REPLICA_SET_MODE=arbiter
-      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
-      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=password123
-      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+  orders-web:
+    <<: *client
+    command: pnpm --filter @oam/orders dev --host 0.0.0.0
+    ports: ["3003:3003"]
+    volumes:
+      - ./apps/client/orders:/repo/apps/client/orders
+      - /repo/apps/client/orders/node_modules
+    depends_on: [orders, products, payments]
+
+  admin-web:
+    <<: *client
+    command: pnpm --filter @oam/admin dev --host 0.0.0.0
+    ports: ["3004:3004"]
+    volumes:
+      - ./apps/client/admin:/repo/apps/client/admin
+      - /repo/apps/client/admin/node_modules
+    depends_on: [auth, products, orders, payments]
 
 volumes:
-  mongodb_master_data:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:

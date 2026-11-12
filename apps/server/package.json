@@ -1,0 +1,79 @@
+{
+  "name": "server",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "prisma:generate": "for s in auth products orders payments; do prisma generate --config apps/$s/prisma.config.ts || exit 1; done",
+    "db:push": "prisma db push --skip-generate --config",
+    "build": "pnpm run prisma:generate && nest build --all",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "typecheck": "pnpm run prisma:generate && tsc --noEmit -p tsconfig.build.json",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "biome check",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "@nestjs/common": "*",
+    "@nestjs/config": "*",
+    "@nestjs/core": "*",
+    "@nestjs/microservices": "*",
+    "@nestjs/platform-express": "*",
+    "@nestjs/swagger": "*",
+    "@prisma/client": "*",
+    "amqp-connection-manager": "*",
+    "amqplib": "*",
+    "backend-common": "workspace:*",
+    "bullmq": "*",
+    "class-transformer": "*",
+    "class-validator": "*",
+    "joi": "*",
+    "ports": "workspace:*",
+    "razorpay": "*",
+    "reflect-metadata": "*",
+    "rxjs": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "*",
+    "@nestjs/cli": "*",
+    "@nestjs/schematics": "*",
+    "@nestjs/testing": "*",
+    "@types/amqplib": "*",
+    "@types/express": "*",
+    "@types/jest": "*",
+    "@types/multer": "*",
+    "@types/node": "*",
+    "biome-config": "workspace:*",
+    "jest": "*",
+    "prisma": "*",
+    "source-map-support": "*",
+    "ts-jest": "*",
+    "ts-loader": "*",
+    "ts-node": "*",
+    "tsconfig-paths": "*",
+    "typescript": "*"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/apps/"
+    ]
+  }
+}

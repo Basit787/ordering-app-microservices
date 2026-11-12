@@ -1,0 +1,40 @@
+// prisma-client-js writes the client into node_modules/@prisma-db/payments (no generated folder in the source tree)
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma-db/payments"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// created: waiting for the shopper in Razorpay Checkout; failed: declined (mock) or cancelled before payment
+enum PaymentStatus {
+  created
+  succeeded
+  failed
+  refunded
+}
+
+// One payment per order; a repeated order_created replays the stored outcome
+model Payment {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  orderId           String        @unique @db.ObjectId
+  userId            String        @db.ObjectId
+  amountCents       Int
+  currency          String        @default("INR")
+  status            PaymentStatus
+  // "razorpay", or "mock" when no Razorpay keys are configured
+  provider          String
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  // Last failure Razorpay reported, or why the payment was closed
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([razorpayOrderId])
+  @@map("payments")
+}
